@@ -1,0 +1,44 @@
+# Ghost Trader - Python 3.12 Requirements
+# Cleaned up: Removed dead dependencies from failed experiments
+# Added: optuna (was missing but used in code)
+
+# Core Data Processing
+numpy>=1.26.4,<2.0.0
+pandas>=2.2.3,<3.0.0
+scipy>=1.15.1,<2.0.0
+
+# Machine Learning - Tree-based Models (PRIMARY)
+xgboost>=2.1.4,<3.0.0
+lightgbm>=4.6.0,<5.0.0
+scikit-learn>=1.6.1,<2.0.0
+
+# Hyperparameter Optimization
+scikit-optimize>=0.10.2,<1.0.0
+optuna>=4.6.0,<5.0.0
+
+# Visualization
+matplotlib>=3.10.0,<4.0.0
+seaborn>=0.13.2,<1.0.0
+plotly>=6.3.1,<7.0.0
+
+# Data Fetching
+python-binance>=1.0.27,<2.0.0
+yfinance>=0.2.66,<1.0.0
+requests>=2.32.3,<3.0.0
+
+# Technical Analysis
+ta>=0.11.0,<1.0.0
+
+# Utilities
+joblib>=1.4.2,<2.0.0
+PyYAML>=6.0.2,<7.0.0
+
+# Testing
+pytest>=8.4.2,<9.0.0
+
+# Notes:
+# - TensorFlow/Keras removed: Tested but rejected (LSTM/GRU R²=45% vs XGBoost R²=73.51%)
+# - CatBoost removed: Not used (XGBoost is primary model)
+# - Graphviz removed: Tree visualization not used
+# - SHAP removed: Model interpretation not actively used
+# - All transitive dependencies will be installed automatically
