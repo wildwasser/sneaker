@@ -22,6 +22,228 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Why This Matters:
 This project uses an isolated virtual environment to prevent dependency conflicts and ensure reproducible builds. Using global Python environments is strictly prohibited.
 
+## ⚠️ CRITICAL: Development Workflow - MANDATORY
+
+**ALL development work MUST follow this strict workflow to prevent statistical illusions and maintain code quality.**
+
+### Fundamental Truth
+**This codebase may be fundamentally flawed with statistical illusions.** Every change must be rigorously validated before merging to main. Trust nothing. Validate everything.
+
+### GitHub Repository
+**URL:** https://github.com/wildwasser/sneaker
+
+### MANDATORY: GitHub Issue Tracking
+
+**Every piece of work MUST be tracked in a GitHub issue BEFORE starting work.**
+
+1. **Create Issue First:**
+   ```bash
+   # Create issue on GitHub before ANY code changes
+   gh issue create --title "[TYPE] Description" --body "..."
+   ```
+
+2. **Use Issue Templates:**
+   - Bug Report: For bugs or suspected statistical illusions
+   - Feature Request: For new features (must include validation plan)
+   - Validation Failure: When tests fail
+
+3. **Reference Issues:**
+   - All commits must reference issue number: `"Fix #123: description"`
+   - All branches must include issue number: `issue-123-description`
+
+**NO WORK WITHOUT AN ISSUE. NO EXCEPTIONS.**
+
+### MANDATORY: Branch Strategy
+
+**Main branch is PROTECTED. All work happens on issue-numbered feature branches.**
+
+1. **Create Branch for Every Issue:**
+   ```bash
+   # After creating GitHub issue (e.g., issue #42)
+   git checkout -b issue-42-short-description
+   ```
+
+2. **Branch Naming Convention:**
+   - Format: `issue-<number>-<short-description>`
+   - Examples:
+     - `issue-1-validate-model-regression`
+     - `issue-5-fix-feature-nan-values`
+     - `issue-12-add-backtest-infrastructure`
+
+3. **Branch Lifecycle:**
+   - Create branch from latest main
+   - Work exclusively on that branch
+   - Run ALL validation tests on branch
+   - Only merge to main when validation passes
+   - Delete branch after successful merge
+
+4. **NO Direct Commits to Main:**
+   ```bash
+   # WRONG - NEVER DO THIS
+   git checkout main
+   git commit -m "quick fix"  # ❌ FORBIDDEN
+
+   # RIGHT - ALWAYS DO THIS
+   git checkout -b issue-23-fix-thing
+   git commit -m "Fix #23: proper fix"
+   # ... run validation ...
+   # ... merge via PR when tests pass ...
+   ```
+
+### MANDATORY: Validation Requirements
+
+**Every change must pass BOTH validation tests before merging to main:**
+
+#### 1. Model Regression Analysis (REQUIRED)
+```bash
+# Run regression analysis to check for statistical illusions
+.venv/bin/python scripts/validate_model.py
+
+# Must show:
+# - Feature importance (check for suspicious features)
+# - Train vs test metrics (check for overfitting)
+# - Residual analysis (check for patterns)
+# - Signal distribution (check for sanity)
+```
+
+**Pass Criteria:**
+- Signal R² ≥ 70% (if degraded, reject)
+- Direction accuracy ≥ 95%
+- Test R² within 10% of train R² (overfitting check)
+- No suspicious feature dominance (>40% importance)
+
+#### 2. LINKUSDT 256-Hour Backtest (REQUIRED)
+```bash
+# Run standardized backtest on recent LINKUSDT data
+.venv/bin/python scripts/backtest.py --pair LINKUSDT --hours 256
+
+# Must show:
+# - Sharpe ratio
+# - Max drawdown
+# - Win rate
+# - Total return
+# - Number of trades
+```
+
+**Pass Criteria:**
+- Sharpe ratio ≥ 1.0 (risk-adjusted returns)
+- Win rate ≥ 50% (better than random)
+- Max drawdown ≤ 25% (risk management)
+- Reasonable number of trades (2-15 in 256h)
+
+#### Red Flags (Auto-Reject):
+- 🚩 Train R² >> Test R² (>15% gap)
+- 🚩 Backtest fails but in-sample metrics excellent
+- 🚩 Suspiciously perfect metrics (>99% accuracy)
+- 🚩 Single feature dominates (>50% importance)
+- 🚩 All winning trades (100% win rate)
+- 🚩 Model predicts every candle as signal (>20% signal rate)
+
+### Merge Criteria: What is "True Success"?
+
+**Only merge to main when ALL criteria are met:**
+
+1. ✅ GitHub issue exists and is linked
+2. ✅ Work done on issue-numbered branch
+3. ✅ Model regression analysis passes (see criteria above)
+4. ✅ LINKUSDT 256h backtest passes (see criteria above)
+5. ✅ Code is clean, documented, and follows project style
+6. ✅ No statistical red flags detected
+7. ✅ Validation results documented in issue comments
+
+**If ANY validation fails:**
+- ❌ DO NOT MERGE
+- Document failure in issue
+- Investigate root cause
+- Revise approach or abandon if fundamentally flawed
+
+### Daily Development Workflow
+
+```bash
+# 1. Create issue on GitHub
+gh issue create --title "[FEATURE] Add new indicator" \
+  --body "Description... Validation plan..."
+
+# 2. Note issue number (e.g., #42)
+
+# 3. Create branch
+git checkout main
+git pull origin main
+git checkout -b issue-42-add-new-indicator
+
+# 4. Make changes
+# ... edit code ...
+git add -A
+git commit -m "Add #42: Implement new indicator calculation"
+
+# 5. Run validation tests (MANDATORY)
+.venv/bin/python scripts/validate_model.py  # Must pass
+.venv/bin/python scripts/backtest.py --pair LINKUSDT --hours 256  # Must pass
+
+# 6. Document results in issue
+gh issue comment 42 --body "Validation results: ..."
+
+# 7. If validation passes, push and create PR
+git push origin issue-42-add-new-indicator
+gh pr create --title "Fix #42: Add new indicator" \
+  --body "Closes #42. Validation results attached."
+
+# 8. Merge only if approved and tests pass
+gh pr merge 42 --squash
+
+# 9. Clean up
+git checkout main
+git pull origin main
+git branch -d issue-42-add-new-indicator
+```
+
+### Commands Reference
+
+**GitHub CLI:**
+```bash
+# Create issue
+gh issue create
+
+# List issues
+gh issue list
+
+# View issue
+gh issue view <number>
+
+# Comment on issue
+gh issue comment <number> --body "..."
+
+# Close issue
+gh issue close <number>
+
+# Create PR
+gh pr create
+
+# Merge PR
+gh pr merge <number>
+```
+
+**Git Workflow:**
+```bash
+# Check current branch
+git branch --show-current
+
+# Create branch from main
+git checkout main && git pull && git checkout -b issue-X-name
+
+# Commit with issue reference
+git commit -m "Fix #X: description"
+
+# Push branch
+git push origin issue-X-name
+
+# Delete local branch after merge
+git branch -d issue-X-name
+
+# Delete remote branch after merge
+git push origin --delete issue-X-name
+```
+
 ## Project Overview
 
 **Sneaker** is a clean cryptocurrency reversal prediction system extracted from the "Ghost Trader" project. Ghost became an unmaintainable mess with 94+ issues, failed experiments, and confusing code. Sneaker contains ONLY the working V3 approach.
