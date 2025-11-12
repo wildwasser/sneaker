@@ -65,11 +65,8 @@ BINANCE_MACRO_INDICATORS = {
 }
 
 PREMIUM_INDEX_SYMBOLS = {
-    'BTC_PREMIUM': 'BTCUSDT',  # USDT-margined premium (speculators)
-}
-
-COIN_MARGINED_PREMIUM_SYMBOLS = {
-    'BTC_CM_PREMIUM': 'BTCUSD_PERP',  # Coin-margined premium (BTC holders)
+    'BTC_PREMIUM': 'BTCUSDT',  # USDT-margined premium (BTC sentiment)
+    'ETH_PREMIUM': 'ETHUSDT',  # USDT-margined premium (ETH sentiment)
 }
 
 
@@ -150,81 +147,6 @@ def download_premium_index_klines(client, symbol: str, start_date: str, end_date
     return records
 
 
-def download_coin_margined_premium_klines(client, symbol: str, start_date: str, end_date: str, ticker_name: str, logger) -> list:
-    """
-    Download historical coin-margined premium index klines from Binance Futures.
-
-    Coin-Margined Premium = BTCUSD_PERP (settled in BTC) premium
-    - Different from USDT-margined (different trader base)
-    - BTC holders vs USDT speculators
-    - Spread shows positioning differences
-
-    Args:
-        client: Binance client instance
-        symbol: Coin futures symbol (e.g., 'BTCUSD_PERP')
-        start_date: Start date (YYYY-MM-DD)
-        end_date: End date (YYYY-MM-DD)
-        ticker_name: Name for ticker field (e.g., 'BTC_CM_PREMIUM')
-        logger: Logger instance
-
-    Returns:
-        List of 1-hour coin-margined premium index records
-    """
-    # Convert dates to timestamps
-    start_ts = int(datetime.strptime(start_date, '%Y-%m-%d').timestamp() * 1000)
-    end_ts = int(datetime.strptime(end_date, '%Y-%m-%d').timestamp() * 1000)
-
-    logger.info(f"  Downloading coin-margined premium index for {symbol}...")
-    logger.info(f"    Start: {start_date}")
-    logger.info(f"    End: {end_date}")
-
-    all_klines = []
-    current_start = start_ts
-
-    batch_count = 0
-    while current_start < end_ts:
-        try:
-            # Binance coin futures API
-            batch = client.futures_coin_premium_index_klines(
-                symbol=symbol,
-                interval='1h',
-                startTime=current_start,
-                endTime=end_ts,
-                limit=1500
-            )
-
-            if not batch:
-                break
-
-            all_klines.extend(batch)
-            batch_count += 1
-
-            # Update start time for next batch
-            current_start = batch[-1][0] + 3600000  # Add 1 hour in ms
-
-            # Rate limit respect
-            time.sleep(0.1)
-
-        except Exception as e:
-            logger.error(f"    Error downloading batch: {e}")
-            break
-
-    logger.info(f"  ✓ Downloaded {len(all_klines):,} coin-margined premium klines")
-
-    # Convert to standard format
-    records = []
-    for kline in all_klines:
-        records.append({
-            'timestamp': int(kline[0]),
-            'open': float(kline[1]),      # Premium index open
-            'high': float(kline[2]),      # Premium index high
-            'low': float(kline[3]),       # Premium index low
-            'close': float(kline[4]),     # Premium index close
-            'volume': 0.0,  # Premium index has no volume
-            'ticker': ticker_name
-        })
-
-    return records
 
 
 def main():
@@ -277,11 +199,10 @@ def main():
     logger.info(f"Source: Binance API (spot + futures)")
     logger.info(f"Date range: {start_date} to {end_date}")
     logger.info(f"Approximate hours: {hours}")
-    total_indicators = len(BINANCE_MACRO_INDICATORS) + len(PREMIUM_INDEX_SYMBOLS) + len(COIN_MARGINED_PREMIUM_SYMBOLS)
+    total_indicators = len(BINANCE_MACRO_INDICATORS) + len(PREMIUM_INDEX_SYMBOLS)
     logger.info(f"Total indicators: {total_indicators}")
     logger.info(f"  Spot pairs: {len(BINANCE_MACRO_INDICATORS)} ({', '.join(BINANCE_MACRO_INDICATORS.keys())})")
-    logger.info(f"  USDT-margined premium: {len(PREMIUM_INDEX_SYMBOLS)} ({', '.join(PREMIUM_INDEX_SYMBOLS.keys())})")
-    logger.info(f"  Coin-margined premium: {len(COIN_MARGINED_PREMIUM_SYMBOLS)} ({', '.join(COIN_MARGINED_PREMIUM_SYMBOLS.keys())})")
+    logger.info(f"  Premium indices: {len(PREMIUM_INDEX_SYMBOLS)} ({', '.join(PREMIUM_INDEX_SYMBOLS.keys())})")
     logger.info("")
     logger.info("✅ TRUE 24/7 DATA - ZERO GAPS!")
     logger.info("   - All from Binance (single API)")
@@ -387,37 +308,7 @@ def main():
             import traceback
             traceback.print_exc()
 
-    # Download coin-margined premium index klines
-    logger.info("")
-    logger.info("=" * 80)
-    logger.info("DOWNLOADING COIN-MARGINED PREMIUM INDEX")
-    logger.info("=" * 80)
-
-    for name, symbol in COIN_MARGINED_PREMIUM_SYMBOLS.items():
-        try:
-            logger.info(f"\n{name} ({symbol}):")
-
-            # Download coin-margined premium index klines (native 1H data!)
-            records = download_coin_margined_premium_klines(
-                client, symbol, start_date, end_date, name, logger
-            )
-
-            if records:
-                all_data.extend(records)
-
-                logger.info(f"  ✓ Downloaded {len(records):,} hourly records")
-                if records:
-                    first_dt = datetime.fromtimestamp(records[0]['timestamp'] / 1000).strftime('%Y-%m-%d %H:%M')
-                    last_dt = datetime.fromtimestamp(records[-1]['timestamp'] / 1000).strftime('%Y-%m-%d %H:%M')
-                    logger.info(f"  Range: {first_dt} to {last_dt}")
-            else:
-                logger.warning(f"  ⚠️  No coin-margined premium data returned for {symbol}")
-
-        except Exception as e:
-            logger.error(f"  ❌ Error: {e}")
-            import traceback
-            traceback.print_exc()
-
+    
     if not all_data:
         logger.error("❌ No data downloaded!")
         return 1
