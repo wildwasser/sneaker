@@ -11,8 +11,9 @@ from typing import List, Dict
 
 
 # 20 trading pairs used in training
+# Note: BNBUSDT removed - now used exclusively as macro indicator (exchange flow)
 BASELINE_PAIRS = [
-    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT",
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "MATICUSDT", "XRPUSDT",
     "ADAUSDT", "DOGEUSDT", "DOTUSDT", "SUIUSDT", "LINKUSDT",
     "AVAXUSDT", "ATOMUSDT", "LTCUSDT", "NEARUSDT", "TRXUSDT",
     "ALGOUSDT", "APTUSDT", "AAVEUSDT", "XLMUSDT", "XMRUSDT"

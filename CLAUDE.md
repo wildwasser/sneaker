@@ -779,8 +779,9 @@ export BINANCE_SECRET='your_api_secret'
 **Default 20 pairs** (defined in `sneaker/data.py`):
 
 ```python
+# Note: BNBUSDT removed - now used exclusively as macro indicator (exchange flow)
 BASELINE_PAIRS = [
-    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT",
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "MATICUSDT", "XRPUSDT",
     "ADAUSDT", "DOGEUSDT", "DOTUSDT", "SUIUSDT", "LINKUSDT",
     "AVAXUSDT", "ATOMUSDT", "LTCUSDT", "NEARUSDT", "TRXUSDT",
     "ALGOUSDT", "APTUSDT", "AAVEUSDT", "XLMUSDT", "XMRUSDT"
