@@ -178,15 +178,21 @@ def download_coin_margined_premium_klines(client, symbol: str, start_date: str, 
     all_klines = []
     current_start = start_ts
 
+    # Coin-margined API has 200-day max limit, so chunk requests
+    max_interval_ms = 200 * 24 * 60 * 60 * 1000  # 200 days in milliseconds
+
     batch_count = 0
     while current_start < end_ts:
         try:
+            # Calculate end for this chunk (max 200 days)
+            chunk_end = min(current_start + max_interval_ms, end_ts)
+
             # Binance coin futures API
             batch = client.futures_coin_premium_index_klines(
                 symbol=symbol,
                 interval='1h',
                 startTime=current_start,
-                endTime=end_ts,
+                endTime=chunk_end,
                 limit=1500
             )
 
