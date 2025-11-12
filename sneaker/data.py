@@ -149,6 +149,77 @@ def download_multiple_pairs(
     return data
 
 
+def download_historical_data(
+    pair: str,
+    start_date: str,
+    end_date: str = None,
+    interval: str = '1h'
+) -> pd.DataFrame:
+    """
+    Download historical OHLCV data with specific date range.
+
+    Args:
+        pair: Trading pair (e.g., "BTCUSDT")
+        start_date: Start date (e.g., "1 Jan 2021" or "2021-01-01")
+        end_date: End date (default: now)
+        interval: Candle interval (default: '1h')
+
+    Returns:
+        DataFrame with columns:
+            - timestamp: Unix timestamp (ms)
+            - open, high, low, close: Price
+            - volume: Trading volume
+            - trades: Number of trades
+            - pair: Trading pair symbol
+    """
+    client = get_binance_client()
+
+    # Map interval string to Binance constant
+    interval_map = {
+        '1h': Client.KLINE_INTERVAL_1HOUR,
+        '4h': Client.KLINE_INTERVAL_4HOUR,
+        '1d': Client.KLINE_INTERVAL_1DAY,
+    }
+    binance_interval = interval_map.get(interval, Client.KLINE_INTERVAL_1HOUR)
+
+    # Fetch historical klines
+    klines = client.get_historical_klines(
+        pair,
+        binance_interval,
+        start_date,
+        end_date
+    )
+
+    if not klines:
+        return pd.DataFrame()
+
+    # Convert to DataFrame
+    df = pd.DataFrame(klines, columns=[
+        'timestamp', 'open', 'high', 'low', 'close', 'volume',
+        'close_time', 'quote_volume', 'trades', 'taker_buy_base',
+        'taker_buy_quote', 'ignore'
+    ])
+
+    # Keep only what we need
+    df = df[[
+        'timestamp', 'open', 'high', 'low', 'close', 'volume', 'trades'
+    ]].copy()
+
+    # Convert types
+    df['timestamp'] = df['timestamp'].astype(int)
+    df['open'] = df['open'].astype(float)
+    df['high'] = df['high'].astype(float)
+    df['low'] = df['low'].astype(float)
+    df['close'] = df['close'].astype(float)
+    df['volume'] = df['volume'].astype(float)
+    df['trades'] = df['trades'].astype(int)
+
+    # Add pair column
+    df['pair'] = pair
+
+    return df
+
+
 def download_live_data(
     pair: str,
     hours: int = 180
