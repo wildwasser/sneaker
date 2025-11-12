@@ -860,10 +860,7 @@ BASELINE_PAIRS = [
 ### Documentation
 - `README.md` - Comprehensive usage guide
 - `CLAUDE.md` - This file (development guide)
-- `EXTRACTION_PLAN.md` - Extraction strategy from Ghost
 - `WHATS_READY.md` - What's implemented vs missing
-- `PROGRESS_UPDATE.md` - Extraction progress log
-- `COMPLETE.md` - Extraction completion summary
 
 ### Core Modules
 - `sneaker/__init__.py` - Package exports
@@ -986,4 +983,4 @@ signals, summary = generate_signals(model, X, threshold=4.0)
 
 ---
 
-**For more details, see README.md. For extraction history, see EXTRACTION_PLAN.md.**
+**For more details, see README.md.**
