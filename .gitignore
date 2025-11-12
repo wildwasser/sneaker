@@ -75,3 +75,7 @@ htmlcov/
 *.bak
 tmp/
 temp/
+
+# IMPORTANT: proof/ folder is TRACKED (not ignored)
+# This folder contains validation evidence and must be committed
+# Do NOT add proof/ to .gitignore

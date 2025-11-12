@@ -244,6 +244,22 @@ git branch -d issue-X-name
 git push origin --delete issue-X-name
 ```
 
+### 📖 Complete Workflow Documentation
+
+**For detailed, step-by-step workflow instructions, see `WORKFLOW.md`.**
+
+That document contains:
+- Complete workflow from issue creation to merge
+- Visual inspection checklists for proof folder
+- Troubleshooting guide
+- Special cases (hotfixes, multiple issues, re-validation)
+- Quick reference commands
+
+**Key documents:**
+- `WORKFLOW.md` - Detailed step-by-step workflow (READ THIS FIRST)
+- `VALIDATION.md` - Pass/fail criteria and red flag detection
+- `proof/README.md` - Proof folder structure and interpretation
+
 ## Project Overview
 
 **Sneaker** is a clean cryptocurrency reversal prediction system extracted from the "Ghost Trader" project. Ghost became an unmaintainable mess with 94+ issues, failed experiments, and confusing code. Sneaker contains ONLY the working V3 approach.

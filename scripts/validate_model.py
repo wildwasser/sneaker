@@ -11,7 +11,7 @@ This script performs comprehensive regression analysis to detect:
 MANDATORY: Run this before merging any model changes to main.
 
 Usage:
-    .venv/bin/python scripts/validate_model.py [--model MODEL_PATH] [--data DATA_PATH]
+    .venv/bin/python scripts/validate_model.py --issue <NUMBER> [--model MODEL_PATH] [--data DATA_PATH]
 
 Pass Criteria:
     - Signal R² ≥ 70%
@@ -23,11 +23,14 @@ Pass Criteria:
 import argparse
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import lightgbm as lgb
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 
@@ -35,6 +38,10 @@ from sklearn.model_selection import train_test_split
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sneaker import setup_logger
+
+# Set plotting style
+sns.set_style('darkgrid')
+plt.rcParams['figure.figsize'] = (12, 8)
 
 # Feature list (83 Enhanced V3 features)
 ENHANCED_V3_FEATURES = [
@@ -235,16 +242,286 @@ def analyze_feature_importance(model):
     }
 
 
-def validate(model_path=None, data_path=None):
+def create_proof_directory(issue_number):
+    """Create proof directory for issue."""
+    proof_dir = Path(__file__).parent.parent / 'proof' / f'issue-{issue_number}'
+    proof_dir.mkdir(parents=True, exist_ok=True)
+    return proof_dir
+
+
+def plot_regression_analysis(y_train, y_train_pred, y_test, y_test_pred, proof_dir, timestamp):
+    """Plot regression: predicted vs actual."""
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+
+    # Train: All samples
+    axes[0, 0].scatter(y_train, y_train_pred, alpha=0.3, s=1)
+    axes[0, 0].plot([y_train.min(), y_train.max()], [y_train.min(), y_train.max()], 'r--', lw=2)
+    axes[0, 0].set_xlabel('Actual Target')
+    axes[0, 0].set_ylabel('Predicted Target')
+    axes[0, 0].set_title('Train: Predicted vs Actual (All Samples)')
+    axes[0, 0].grid(True, alpha=0.3)
+
+    # Test: All samples
+    axes[0, 1].scatter(y_test, y_test_pred, alpha=0.3, s=1)
+    axes[0, 1].plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
+    axes[0, 1].set_xlabel('Actual Target')
+    axes[0, 1].set_ylabel('Predicted Target')
+    axes[0, 1].set_title('Test: Predicted vs Actual (All Samples)')
+    axes[0, 1].grid(True, alpha=0.3)
+
+    # Train: Signals only
+    train_signal_mask = y_train != 0
+    if train_signal_mask.sum() > 0:
+        axes[1, 0].scatter(y_train[train_signal_mask], y_train_pred[train_signal_mask], alpha=0.5, s=2)
+        min_val = min(y_train[train_signal_mask].min(), y_train_pred[train_signal_mask].min())
+        max_val = max(y_train[train_signal_mask].max(), y_train_pred[train_signal_mask].max())
+        axes[1, 0].plot([min_val, max_val], [min_val, max_val], 'r--', lw=2)
+        axes[1, 0].set_xlabel('Actual Target')
+        axes[1, 0].set_ylabel('Predicted Target')
+        axes[1, 0].set_title('Train: Predicted vs Actual (Signals Only)')
+        axes[1, 0].grid(True, alpha=0.3)
+
+    # Test: Signals only
+    test_signal_mask = y_test != 0
+    if test_signal_mask.sum() > 0:
+        axes[1, 1].scatter(y_test[test_signal_mask], y_test_pred[test_signal_mask], alpha=0.5, s=2)
+        min_val = min(y_test[test_signal_mask].min(), y_test_pred[test_signal_mask].min())
+        max_val = max(y_test[test_signal_mask].max(), y_test_pred[test_signal_mask].max())
+        axes[1, 1].plot([min_val, max_val], [min_val, max_val], 'r--', lw=2)
+        axes[1, 1].set_xlabel('Actual Target')
+        axes[1, 1].set_ylabel('Predicted Target')
+        axes[1, 1].set_title('Test: Predicted vs Actual (Signals Only)')
+        axes[1, 1].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    save_path = proof_dir / f'regression_analysis_{timestamp}.png'
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+
+    return str(save_path)
+
+
+def plot_residual_analysis(y_test, y_test_pred, proof_dir, timestamp):
+    """Plot residual analysis."""
+    residuals = y_test - y_test_pred
+
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+
+    # Residuals vs Predicted
+    axes[0, 0].scatter(y_test_pred, residuals, alpha=0.3, s=1)
+    axes[0, 0].axhline(y=0, color='r', linestyle='--', lw=2)
+    axes[0, 0].set_xlabel('Predicted Value')
+    axes[0, 0].set_ylabel('Residual')
+    axes[0, 0].set_title('Residuals vs Predicted (Look for patterns = bad)')
+    axes[0, 0].grid(True, alpha=0.3)
+
+    # Residual histogram
+    axes[0, 1].hist(residuals, bins=100, edgecolor='black', alpha=0.7)
+    axes[0, 1].set_xlabel('Residual')
+    axes[0, 1].set_ylabel('Frequency')
+    axes[0, 1].set_title('Residual Distribution (Should be centered at 0)')
+    axes[0, 1].grid(True, alpha=0.3)
+
+    # Q-Q plot
+    from scipy import stats
+    stats.probplot(residuals, dist="norm", plot=axes[1, 0])
+    axes[1, 0].set_title('Q-Q Plot (Should follow red line for normality)')
+    axes[1, 0].grid(True, alpha=0.3)
+
+    # Residuals vs Actual
+    axes[1, 1].scatter(y_test, residuals, alpha=0.3, s=1)
+    axes[1, 1].axhline(y=0, color='r', linestyle='--', lw=2)
+    axes[1, 1].set_xlabel('Actual Value')
+    axes[1, 1].set_ylabel('Residual')
+    axes[1, 1].set_title('Residuals vs Actual')
+    axes[1, 1].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    save_path = proof_dir / f'residual_analysis_{timestamp}.png'
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+
+    return str(save_path)
+
+
+def plot_feature_importance(importance_analysis, proof_dir, timestamp):
+    """Plot feature importance."""
+    top_features = importance_analysis['top_features']
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    features = [f[0] for f in top_features]
+    importances = [f[1] for f in top_features]
+
+    y_pos = np.arange(len(features))
+    colors = ['red' if imp > 0.40 else 'orange' if imp > 0.30 else 'green' for imp in importances]
+
+    ax.barh(y_pos, importances, color=colors, alpha=0.7)
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(features)
+    ax.invert_yaxis()
+    ax.set_xlabel('Normalized Importance')
+    ax.set_title('Top 10 Feature Importance (Red >40% = Dominance Warning)')
+    ax.axvline(x=0.40, color='red', linestyle='--', lw=2, label='40% threshold')
+    ax.legend()
+    ax.grid(True, alpha=0.3, axis='x')
+
+    plt.tight_layout()
+    save_path = proof_dir / f'feature_importance_{timestamp}.png'
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+
+    return str(save_path)
+
+
+def plot_signal_distribution(y_test, y_test_pred, threshold, proof_dir, timestamp):
+    """Plot signal distribution."""
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+
+    # Actual target distribution
+    axes[0, 0].hist(y_test, bins=100, edgecolor='black', alpha=0.7)
+    axes[0, 0].axvline(x=threshold, color='red', linestyle='--', lw=2, label=f'{threshold}σ threshold')
+    axes[0, 0].axvline(x=-threshold, color='red', linestyle='--', lw=2)
+    axes[0, 0].set_xlabel('Target Value (σ)')
+    axes[0, 0].set_ylabel('Frequency')
+    axes[0, 0].set_title('Actual Target Distribution')
+    axes[0, 0].legend()
+    axes[0, 0].grid(True, alpha=0.3)
+
+    # Predicted distribution
+    axes[0, 1].hist(y_test_pred, bins=100, edgecolor='black', alpha=0.7, color='orange')
+    axes[0, 1].axvline(x=threshold, color='red', linestyle='--', lw=2, label=f'{threshold}σ threshold')
+    axes[0, 1].axvline(x=-threshold, color='red', linestyle='--', lw=2)
+    axes[0, 1].set_xlabel('Predicted Value (σ)')
+    axes[0, 1].set_ylabel('Frequency')
+    axes[0, 1].set_title('Predicted Distribution')
+    axes[0, 1].legend()
+    axes[0, 1].grid(True, alpha=0.3)
+
+    # Signal vs zero comparison (actual)
+    signal_mask = y_test != 0
+    axes[1, 0].hist([y_test[~signal_mask], y_test[signal_mask]],
+                    bins=100, label=['Zeros', 'Signals'], alpha=0.7, stacked=True)
+    axes[1, 0].set_xlabel('Target Value (σ)')
+    axes[1, 0].set_ylabel('Frequency')
+    axes[1, 0].set_title('Actual: Zeros vs Signals')
+    axes[1, 0].legend()
+    axes[1, 0].grid(True, alpha=0.3)
+
+    # Predicted signal rate by threshold
+    thresholds = np.linspace(0, 10, 100)
+    signal_rates = [np.mean(np.abs(y_test_pred) >= t) * 100 for t in thresholds]
+    axes[1, 1].plot(thresholds, signal_rates, lw=2)
+    axes[1, 1].axvline(x=threshold, color='red', linestyle='--', lw=2, label=f'{threshold}σ (current)')
+    axes[1, 1].axhline(y=20, color='orange', linestyle='--', lw=2, label='20% (max acceptable)')
+    axes[1, 1].set_xlabel('Threshold (σ)')
+    axes[1, 1].set_ylabel('Signal Rate (%)')
+    axes[1, 1].set_title('Signal Rate vs Threshold')
+    axes[1, 1].legend()
+    axes[1, 1].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    save_path = proof_dir / f'signal_distribution_{timestamp}.png'
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+
+    return str(save_path)
+
+
+def save_validation_report(metrics, importance_analysis, checks, red_flags, proof_dir, timestamp, issue_number):
+    """Save comprehensive validation report."""
+    report_path = proof_dir / f'validation_report_{timestamp}.txt'
+
+    with open(report_path, 'w') as f:
+        f.write("=" * 80 + "\n")
+        f.write(f"MODEL VALIDATION REPORT - Issue #{issue_number}\n")
+        f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write("=" * 80 + "\n\n")
+
+        f.write("OVERALL METRICS\n")
+        f.write("-" * 80 + "\n")
+        f.write(f"Train R²:           {metrics['train_r2']:.4f}\n")
+        f.write(f"Test R²:            {metrics['test_r2']:.4f}\n")
+        f.write(f"Train/Test Gap:     {metrics['train_test_gap']:.4f}\n")
+        f.write(f"Train RMSE:         {metrics['train_rmse']:.4f}\n")
+        f.write(f"Test RMSE:          {metrics['test_rmse']:.4f}\n\n")
+
+        f.write("SIGNAL METRICS (What Matters!)\n")
+        f.write("-" * 80 + "\n")
+        f.write(f"Train Signal R²:    {metrics['train_signal_r2']:.4f}\n")
+        f.write(f"Test Signal R²:     {metrics['test_signal_r2']:.4f}\n")
+        f.write(f"Train Signal MAE:   {metrics['train_signal_mae']:.4f}σ\n")
+        f.write(f"Test Signal MAE:    {metrics['test_signal_mae']:.4f}σ\n")
+        f.write(f"Train Dir Acc:      {metrics['train_dir_acc']:.4f}\n")
+        f.write(f"Test Dir Acc:       {metrics['test_dir_acc']:.4f}\n\n")
+
+        f.write("ZERO METRICS\n")
+        f.write("-" * 80 + "\n")
+        f.write(f"Train Zero MAE:     {metrics['train_zero_mae']:.4f}σ\n")
+        f.write(f"Test Zero MAE:      {metrics['test_zero_mae']:.4f}σ\n\n")
+
+        f.write("SIGNAL RATE\n")
+        f.write("-" * 80 + "\n")
+        f.write(f"Test Signal Rate:   {metrics['test_signal_rate']:.4f}\n\n")
+
+        f.write("FEATURE IMPORTANCE\n")
+        f.write("-" * 80 + "\n")
+        f.write(f"Max Feature:        {importance_analysis['max_feature']}\n")
+        f.write(f"Max Importance:     {importance_analysis['max_importance']:.4f}\n\n")
+        f.write("Top 10 Features:\n")
+        for i, (feat, imp) in enumerate(importance_analysis['top_features'], 1):
+            f.write(f"  {i:2d}. {feat:30s} {imp:.4f}\n")
+        f.write("\n")
+
+        f.write("PASS/FAIL CRITERIA\n")
+        f.write("=" * 80 + "\n")
+        for check, passed in checks.items():
+            status = 'PASS' if passed else 'FAIL'
+            f.write(f"[{status}] {check}\n")
+        f.write("\n")
+
+        f.write("RED FLAGS\n")
+        f.write("=" * 80 + "\n")
+        if red_flags:
+            for flag in red_flags:
+                f.write(f"{flag}\n")
+        else:
+            f.write("No red flags detected\n")
+        f.write("\n")
+
+        f.write("FINAL VERDICT\n")
+        f.write("=" * 80 + "\n")
+        if all(checks.values()) and not red_flags:
+            f.write("✅ VALIDATION PASSED - Model appears statistically sound\n")
+        else:
+            f.write("❌ VALIDATION FAILED - Statistical illusions or issues detected\n")
+            f.write("DO NOT MERGE TO MAIN\n")
+
+    return str(report_path)
+
+
+def validate(model_path=None, data_path=None, issue_number=None):
     """Run full validation pipeline."""
     logger = setup_logger('validate')
+
+    # Require issue number
+    if issue_number is None:
+        logger.error("ERROR: --issue parameter is REQUIRED")
+        logger.error("Usage: .venv/bin/python scripts/validate_model.py --issue <NUMBER>")
+        return 1
 
     # Default paths
     if data_path is None:
         data_path = Path(__file__).parent.parent / 'data' / 'enhanced_v3_dataset.json'
 
+    # Create proof directory
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    proof_dir = create_proof_directory(issue_number)
+    logger.info(f"Proof directory: {proof_dir}")
+
     logger.info("=" * 80)
-    logger.info("MODEL VALIDATION - Statistical Illusion Check")
+    logger.info(f"MODEL VALIDATION - Issue #{issue_number}")
+    logger.info("Statistical Illusion Check")
     logger.info("=" * 80)
 
     # Load data
@@ -352,27 +629,64 @@ def validate(model_path=None, data_path=None):
     else:
         logger.info("✅ No red flags detected")
 
+    # Generate proof visualizations
+    logger.info("\n" + "=" * 80)
+    logger.info("GENERATING PROOF VISUALIZATIONS")
+    logger.info("=" * 80)
+
+    y_train_pred = model.predict(X_train)
+    y_test_pred = model.predict(X_test)
+
+    logger.info("Creating regression analysis plot...")
+    reg_plot = plot_regression_analysis(y_train, y_train_pred, y_test, y_test_pred, proof_dir, timestamp)
+    logger.info(f"  Saved: {reg_plot}")
+
+    logger.info("Creating residual analysis plot...")
+    res_plot = plot_residual_analysis(y_test, y_test_pred, proof_dir, timestamp)
+    logger.info(f"  Saved: {res_plot}")
+
+    logger.info("Creating feature importance plot...")
+    feat_plot = plot_feature_importance(importance_analysis, proof_dir, timestamp)
+    logger.info(f"  Saved: {feat_plot}")
+
+    logger.info("Creating signal distribution plot...")
+    sig_plot = plot_signal_distribution(y_test, y_test_pred, 4.0, proof_dir, timestamp)
+    logger.info(f"  Saved: {sig_plot}")
+
+    logger.info("Saving validation report...")
+    report = save_validation_report(metrics, importance_analysis, checks, red_flags, proof_dir, timestamp, issue_number)
+    logger.info(f"  Saved: {report}")
+
     # Final verdict
     logger.info("\n" + "=" * 80)
     if all_passed:
         logger.info("✅ VALIDATION PASSED - Model appears statistically sound")
         logger.info("=" * 80)
+        logger.info(f"\n📁 Proof saved to: {proof_dir}")
+        logger.info("\nNext steps:")
+        logger.info(f"  1. Review visualizations in {proof_dir}")
+        logger.info(f"  2. git add {proof_dir}")
+        logger.info(f"  3. git commit -m 'Add #{issue_number}: validation proof'")
+        logger.info(f"  4. Continue with backtest: .venv/bin/python scripts/backtest.py --issue {issue_number}")
         return 0
     else:
         logger.error("❌ VALIDATION FAILED - Statistical illusions or issues detected")
         logger.error("=" * 80)
+        logger.error(f"\n📁 Proof saved to: {proof_dir}")
         logger.error("\nDO NOT MERGE TO MAIN. Investigate issues before proceeding.")
+        logger.error(f"Review visualizations in {proof_dir} to diagnose problems.")
         return 1
 
 
 def main():
     parser = argparse.ArgumentParser(description='Validate model for statistical illusions')
+    parser.add_argument('--issue', type=int, required=True, help='GitHub issue number (REQUIRED)')
     parser.add_argument('--model', type=str, help='Path to model file (optional, will train if not provided)')
     parser.add_argument('--data', type=str, help='Path to dataset JSON (default: data/enhanced_v3_dataset.json)')
 
     args = parser.parse_args()
 
-    sys.exit(validate(model_path=args.model, data_path=args.data))
+    sys.exit(validate(model_path=args.model, data_path=args.data, issue_number=args.issue))
 
 
 if __name__ == '__main__':

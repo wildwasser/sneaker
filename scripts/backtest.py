@@ -8,7 +8,7 @@ Tests on LINKUSDT with financial data and futures data available.
 MANDATORY: Run this before merging any model changes to main.
 
 Usage:
-    .venv/bin/python scripts/backtest.py [--pair PAIR] [--hours HOURS] [--threshold SIGMA]
+    .venv/bin/python scripts/backtest.py --issue <NUMBER> [--pair PAIR] [--hours HOURS] [--threshold SIGMA]
 
 Pass Criteria:
     - Sharpe ratio ≥ 1.0
@@ -26,10 +26,13 @@ Trading Logic:
 import argparse
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -41,6 +44,10 @@ from sneaker import (
     load_model,
     generate_signals
 )
+
+# Set plotting style
+sns.set_style('darkgrid')
+plt.rcParams['figure.figsize'] = (14, 10)
 
 # Feature list (83 Enhanced V3 features)
 ENHANCED_V3_FEATURES = [
