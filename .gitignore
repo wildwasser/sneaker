@@ -52,7 +52,11 @@ models/*.joblib
 data/*.json
 data/*.csv
 data/*.parquet
+data/**/*.json
+data/**/*.csv
+data/**/*.parquet
 !data/.gitkeep
+!data/**/.gitkeep
 
 # Visualizations
 visualizations/*.png
