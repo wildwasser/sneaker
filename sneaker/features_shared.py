@@ -3,30 +3,17 @@
 CRITICAL: NO LOOK-FORWARD FUNCTIONALITY
 All features in this module must be calculable on live data without future information.
 
-Shared features (12 total - REDUCED from 93):
-Selected based on feature importance analysis from Issue #8.
-Top 12 features by importance (87% reduction from original 93):
-
-1. stoch_vel - Stochastic velocity (momentum indicator)
-2. rsi_7_vel - Fast RSI velocity (rapid momentum changes)
-3. bb_position_vel - Bollinger Band position velocity (volatility momentum)
-4. adx - Average Directional Index (trend strength)
-5. rsi_vel - RSI velocity (momentum)
-6. di_diff_vel - Directional indicator difference velocity
-7. squeeze_duration - BB squeeze duration (consolidation periods)
-8. vol_regime_vel - Volatility regime velocity
-9. adx_accel - ADX acceleration (trend strength momentum)
-10. adx_vel - ADX velocity (trend strength changes)
-11. stoch_accel - Stochastic acceleration (momentum acceleration)
-12. macro_BNB_vel - BNB velocity (exchange flow indicator)
+Shared features (89 total):
+- 20 core indicators (from indicators.py)
+- 24 momentum features (price ROC, accelerations, vol features)
+- 32 advanced features (interactions, vol regime, divergences, trend strength)
+- 1 statistical feature (squeeze_duration)
+- 12 macro features (GOLD, BNB, BTC_PREMIUM, ETH_PREMIUM: close + vel + ROC)
 
 EXCLUDED from shared (training-only):
 - hurst_exponent (complex, unstable on live)
 - permutation_entropy (complex, may overfit)
 - cusum_signal (cumulative, grows indefinitely)
-
-NOTE: Feature calculation functions still compute all features (needed for dependencies),
-but only the 12 most important features are extracted via SHARED_FEATURE_LIST.
 """
 
 import numpy as np
@@ -369,10 +356,7 @@ def add_all_shared_features(df: pd.DataFrame, macro_df: pd.DataFrame) -> pd.Data
     """
     Add all shared features to DataFrame (NO look-forward).
 
-    IMPORTANT: Calculates all features (for dependencies), but SHARED_FEATURE_LIST
-    contains only the top 12 most important features (Issue #19).
-
-    Features calculated:
+    Features added:
     - 12 macro features (GOLD, BNB, BTC_PREMIUM, ETH_PREMIUM: close + vel + ROC)
     - 20 core indicators (from indicators.py)
     - 24 momentum features
@@ -380,14 +364,14 @@ def add_all_shared_features(df: pd.DataFrame, macro_df: pd.DataFrame) -> pd.Data
     - 4 trend strength features
     - 1 statistical feature (squeeze_duration)
 
-    Features extracted (via SHARED_FEATURE_LIST): 12 top features by importance
+    Total: 93 shared features (12 macro + 20 core + 24 momentum + 32 advanced + 4 trend + 1 statistical)
 
     Args:
         df: DataFrame with crypto OHLCV data (columns: open, high, low, close, volume, pair, timestamp)
         macro_df: DataFrame with macro OHLCV data (columns: open, high, low, close, volume, ticker, timestamp)
 
     Returns:
-        DataFrame with all features calculated (but only 12 extracted via SHARED_FEATURE_LIST)
+        DataFrame with all 93 shared features added
     """
     # Ensure required columns exist
     required_crypto = ['open', 'high', 'low', 'close', 'volume', 'pair', 'timestamp']
@@ -428,23 +412,51 @@ def add_all_shared_features(df: pd.DataFrame, macro_df: pd.DataFrame) -> pd.Data
 # Feature List for Reference
 # ====================================================================================
 
-# Top 12 features by importance (Issue #19)
-# Selected from feature importance analysis in Issue #8
-# 87% reduction from original 93 features
+# All 93 shared features
 SHARED_FEATURE_LIST = [
-    'stoch_vel',        # 1. Stochastic velocity (highest importance ~12,000)
-    'rsi_7_vel',        # 2. Fast RSI velocity (~5,800)
-    'bb_position_vel',  # 3. Bollinger Band position velocity (~4,600)
-    'adx',              # 4. Average Directional Index (~3,500)
-    'rsi_vel',          # 5. RSI velocity (~3,000)
-    'di_diff_vel',      # 6. Directional indicator difference velocity (~2,800)
-    'squeeze_duration', # 7. BB squeeze duration (~2,200)
-    'vol_regime_vel',   # 8. Volatility regime velocity (~2,100)
-    'adx_accel',        # 9. ADX acceleration (~2,000)
-    'adx_vel',          # 10. ADX velocity (~1,900)
-    'stoch_accel',      # 11. Stochastic acceleration (~1,800)
-    'macro_BNB_vel',    # 12. BNB velocity - exchange flow indicator (~1,700)
+    # Macro features (12)
+    'macro_GOLD_close', 'macro_BNB_close', 'macro_BTC_PREMIUM_close', 'macro_ETH_PREMIUM_close',
+    'macro_GOLD_vel', 'macro_BNB_vel', 'macro_BTC_PREMIUM_vel', 'macro_ETH_PREMIUM_vel',
+    'macro_GOLD_roc_5', 'macro_BNB_roc_5', 'macro_BTC_PREMIUM_roc_5', 'macro_ETH_PREMIUM_roc_5',
+
+    # Core indicators (20)
+    'rsi', 'rsi_vel', 'rsi_7', 'rsi_7_vel',
+    'bb_position', 'bb_position_vel',
+    'macd_hist', 'macd_hist_vel',
+    'stoch', 'stoch_vel',
+    'di_diff', 'di_diff_vel', 'adx',
+    'adr', 'adr_up_bars', 'adr_down_bars', 'is_up_bar',
+    'vol_ratio', 'vol_ratio_vel',
+    'vwap_20',
+
+    # Momentum features (24)
+    'price_roc_3', 'price_roc_5', 'price_roc_10', 'price_roc_20',
+    'price_accel_5', 'price_accel_10',
+    'rsi_accel', 'rsi_7_accel', 'bb_position_accel', 'macd_hist_accel', 'stoch_accel', 'di_diff_accel',
+    'volatility_regime', 'vol_regime_vel', 'vol_ratio_accel',
+    'atr_14', 'atr_vel',
+    'rsi_2x', 'bb_pos_2x', 'macd_hist_2x', 'price_change_2x',
+    'is_up_streak', 'dist_from_high_20', 'dist_from_low_20', 'dist_from_vwap',
+
+    # Advanced features (32)
+    'rsi_4x', 'bb_pos_4x', 'macd_hist_4x', 'price_change_4x', 'vol_ratio_4x',
+    'rsi_bb_interaction', 'macd_vol_interaction', 'rsi_stoch_interaction', 'bb_vol_interaction', 'adx_di_interaction',
+    'price_rsi_momentum_align',
+    'vol_percentile', 'vol_regime_low', 'vol_regime_med', 'vol_regime_high', 'vol_zscore',
+    'is_new_high_20', 'is_new_low_20', 'price_range_position',
+    'consecutive_higher_highs', 'consecutive_lower_lows',
+    'vwap_distance_pct', 'price_20_high',
+    'price_rsi_divergence', 'price_macd_divergence', 'price_stoch_divergence',
+    'rsi_divergence_strength', 'macd_divergence_strength',
+    'vol_momentum_5', 'is_high_volume',
+    'price_20_low',
+
+    # Trend strength (4)
+    'adx_vel', 'adx_accel', 'is_strong_trend', 'is_weak_trend',
+
+    # Statistical (1)
+    'squeeze_duration'
 ]
 
 # Verify count
-assert len(SHARED_FEATURE_LIST) == 12, f"Feature count mismatch: expected 12, got {len(SHARED_FEATURE_LIST)}"
+assert len(SHARED_FEATURE_LIST) == 93, f"Feature count mismatch: expected 93, got {len(SHARED_FEATURE_LIST)}"
