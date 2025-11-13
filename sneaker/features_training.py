@@ -34,37 +34,131 @@ assert len(TRAINING_ONLY_FEATURE_LIST) == 4, \
 # Target Calculation (PRIMARY TRAINING-ONLY FEATURE)
 # ====================================================================================
 
-def calculate_target(df: pd.DataFrame, lookahead_periods: int = 4) -> pd.DataFrame:
+def detect_indicator_flips(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Detect when indicators flip direction (turning points).
+
+    This is the CORE of ghost signal detection - indicators change direction
+    BEFORE price reversals, creating an "echo" or "ghost" of the coming move.
+
+    Detects:
+    - RSI crossing 50 (momentum shift)
+    - BB position crossing 0 (price position shift)
+    - MACD histogram changing sign (trend shift)
+    - Stochastic crossing 50 (momentum shift)
+    - DI diff crossing 0 (directional shift)
+
+    Args:
+        df: DataFrame with indicator columns (must have shared features)
+
+    Returns:
+        DataFrame with flip detection columns added
+    """
+    # Ensure we have the required indicators
+    required = ['rsi', 'bb_position', 'macd_hist', 'stoch', 'di_diff']
+    missing = [col for col in required if col not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required indicators for ghost detection: {missing}")
+
+    # Detect directional flips (sign changes or threshold crosses)
+    # RSI crosses 50 (neutral point)
+    df['rsi_flip'] = ((df['rsi'].shift(1) < 50) & (df['rsi'] > 50)) | \
+                     ((df['rsi'].shift(1) > 50) & (df['rsi'] < 50))
+
+    # BB position crosses 0 (middle band)
+    df['bb_flip'] = ((df['bb_position'].shift(1) < 0) & (df['bb_position'] > 0)) | \
+                    ((df['bb_position'].shift(1) > 0) & (df['bb_position'] < 0))
+
+    # MACD histogram changes sign
+    df['macd_flip'] = ((df['macd_hist'].shift(1) < 0) & (df['macd_hist'] > 0)) | \
+                      ((df['macd_hist'].shift(1) > 0) & (df['macd_hist'] < 0))
+
+    # Stochastic crosses 50
+    df['stoch_flip'] = ((df['stoch'].shift(1) < 50) & (df['stoch'] > 50)) | \
+                       ((df['stoch'].shift(1) > 50) & (df['stoch'] < 50))
+
+    # DI diff crosses 0
+    df['di_flip'] = ((df['di_diff'].shift(1) < 0) & (df['di_diff'] > 0)) | \
+                    ((df['di_diff'].shift(1) > 0) & (df['di_diff'] < 0))
+
+    # Convert to integers
+    df['rsi_flip'] = df['rsi_flip'].astype(int)
+    df['bb_flip'] = df['bb_flip'].astype(int)
+    df['macd_flip'] = df['macd_flip'].astype(int)
+    df['stoch_flip'] = df['stoch_flip'].astype(int)
+    df['di_flip'] = df['di_flip'].astype(int)
+
+    # Count total flips at this candle
+    df['total_flips'] = df['rsi_flip'] + df['bb_flip'] + df['macd_flip'] + \
+                        df['stoch_flip'] + df['di_flip']
+
+    return df
+
+
+def detect_ghost_signals(df: pd.DataFrame, min_flips: int = 3) -> pd.DataFrame:
+    """
+    Detect ghost signals: when multiple indicators flip simultaneously.
+
+    Ghost Signal = 3+ indicators flip direction at the same time
+    This creates an "echo" that precedes price reversals.
+
+    Args:
+        df: DataFrame with flip detection columns
+        min_flips: Minimum number of simultaneous flips to mark as ghost signal (default: 3)
+
+    Returns:
+        DataFrame with 'is_ghost_signal' column (1 = ghost signal, 0 = normal)
+    """
+    # Ghost signal = min_flips or more indicators flip at once
+    df['is_ghost_signal'] = (df['total_flips'] >= min_flips).astype(int)
+
+    return df
+
+
+def calculate_target(df: pd.DataFrame, lookahead_periods: int = 4, min_flips: int = 3) -> pd.DataFrame:
     """
     Calculate volatility-normalized future price change (PRIMARY TARGET).
 
     This is the MAIN training-only feature - what we're teaching the model to predict.
     Uses FUTURE data (lookahead), so CANNOT be used in live prediction.
 
+    CRITICAL: Only calculates target at GHOST SIGNAL points (turning points).
+    Normal candles get target = 0.
+
     Algorithm:
-    1. For each candle, look ahead N periods
-    2. Calculate percent price change: (future_close - current_close) / current_close
-    3. Normalize by volatility: target = price_change / volatility_std
-    4. Result: Target in σ (sigma) units
+    1. Detect indicator flips (RSI, BB, MACD, Stoch, DI crossing thresholds)
+    2. Mark ghost signals (3+ indicators flip simultaneously)
+    3. For ghost signals: measure future reversal magnitude (lookahead periods)
+    4. Normalize by volatility: target = reversal / volatility_std
+    5. Normal candles: target = 0
 
     Args:
-        df: DataFrame with OHLCV data and 'pair' column
+        df: DataFrame with OHLCV data, 'pair' column, and shared features
         lookahead_periods: Hours into future to look (default: 4H)
+        min_flips: Minimum simultaneous flips to mark as ghost signal (default: 3)
 
     Returns:
         DataFrame with 'target' column added (in σ units)
 
     Target Interpretation:
-        - target = 0: Normal candle (no significant reversal)
-        - target > 0: Upward reversal (buy signal)
-        - target < 0: Downward reversal (sell signal)
-        - |target| > 4σ: Strong signal (typical threshold)
+        - target = 0: Normal candle (no ghost signal)
+        - target > +4σ: Strong upward reversal at ghost signal (BUY)
+        - target < -4σ: Strong downward reversal at ghost signal (SELL)
+        - ~5-10% of candles will have non-zero targets (ghost signals)
     """
+    # 1. Detect indicator flips
+    df = detect_indicator_flips(df)
+
+    # 2. Mark ghost signals
+    df = detect_ghost_signals(df, min_flips=min_flips)
+
+    # 3. Calculate future price changes and volatility
     df['target'] = 0.0
 
     for pair in df['pair'].unique():
         mask = df['pair'] == pair
         closes = df.loc[mask, 'close'].values
+        is_ghost = df.loc[mask, 'is_ghost_signal'].values
 
         # Calculate future price change (LOOK-AHEAD!)
         future_change = np.zeros(len(closes))
@@ -76,14 +170,21 @@ def calculate_target(df: pd.DataFrame, lookahead_periods: int = 4) -> pd.DataFra
 
         # Calculate volatility (20-period rolling std of returns)
         returns = pd.Series(closes).pct_change() * 100
-        volatility = returns.rolling(20).std()
+        volatility = returns.rolling(20).std().fillna(1.0)  # Avoid division by zero
 
         # Normalize: target = future_change / volatility
-        # This converts raw price changes to σ units
         normalized = future_change / volatility.values
         normalized = np.nan_to_num(normalized, 0)
 
-        df.loc[mask, 'target'] = normalized
+        # 4. Set target = 0 for normal candles, reversal magnitude for ghost signals
+        target = np.where(is_ghost == 1, normalized, 0.0)
+
+        df.loc[mask, 'target'] = target
+
+    # Clean up temporary columns (keep only target)
+    temp_cols = ['rsi_flip', 'bb_flip', 'macd_flip', 'stoch_flip', 'di_flip',
+                 'total_flips', 'is_ghost_signal']
+    df = df.drop(columns=temp_cols, errors='ignore')
 
     return df
 
@@ -319,7 +420,9 @@ def add_cusum_signal(df: pd.DataFrame) -> pd.DataFrame:
 # Main Function: Add All Training-Only Features
 # ====================================================================================
 
-def add_all_training_features(df: pd.DataFrame, lookahead_periods: int = 4) -> pd.DataFrame:
+def add_all_training_features(df: pd.DataFrame,
+                             lookahead_periods: int = 4,
+                             min_flips: int = 3) -> pd.DataFrame:
     """
     Add all training-only features to DataFrame.
 
@@ -328,23 +431,30 @@ def add_all_training_features(df: pd.DataFrame, lookahead_periods: int = 4) -> p
     REQUIRES:
         - df must already have OHLCV data
         - df must have 'pair' column
-        - Ideally should have shared features from Issue #6 (but not required)
+        - df must have shared features from Issue #6 (for ghost signal detection)
 
     Args:
         df: DataFrame with OHLCV + shared features
         lookahead_periods: Hours into future for target calculation (default: 4)
+        min_flips: Minimum simultaneous indicator flips for ghost signal (default: 3)
 
     Returns:
         DataFrame with 4 additional training-only features:
-        - target (PRIMARY - future price change, σ normalized)
+        - target (PRIMARY - ghost signal reversal magnitude, σ normalized)
         - hurst_exponent (trend persistence)
         - permutation_entropy (predictability)
         - cusum_signal (change detection)
 
     Features added:
-    - 1 target variable (PRIMARY)
+    - 1 target variable (PRIMARY - with ghost signal detection)
     - 3 statistical features
     Total: 4 training-only features
+
+    Ghost Signal Detection:
+        Target is calculated ONLY at ghost signal points (turning points).
+        Ghost signal = 3+ indicators flip direction simultaneously.
+        Normal candles get target = 0.
+        This creates the sparse signal structure for V3 sample weighting.
     """
     # Ensure required columns exist
     required = ['open', 'high', 'low', 'close', 'volume', 'pair']
@@ -352,10 +462,19 @@ def add_all_training_features(df: pd.DataFrame, lookahead_periods: int = 4) -> p
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
 
-    # 1. Calculate target (PRIMARY - uses FUTURE data)
-    df = calculate_target(df, lookahead_periods=lookahead_periods)
+    # Ensure shared features exist (needed for ghost detection)
+    ghost_required = ['rsi', 'bb_position', 'macd_hist', 'stoch', 'di_diff']
+    missing_indicators = [col for col in ghost_required if col not in df.columns]
+    if missing_indicators:
+        raise ValueError(
+            f"Missing required indicators for ghost signal detection: {missing_indicators}\n"
+            f"Run scripts/05_add_shared_features.py first!"
+        )
 
-    # 2. Add statistical features
+    # 1. Calculate target (PRIMARY - uses FUTURE data + ghost signal detection)
+    df = calculate_target(df, lookahead_periods=lookahead_periods, min_flips=min_flips)
+
+    # 2. Add statistical features (optional supplementary features)
     df = add_hurst_exponent(df)
     df = add_permutation_entropy(df)
     df = add_cusum_signal(df)

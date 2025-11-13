@@ -78,6 +78,12 @@ def main():
         default=4,
         help='Lookahead periods for target calculation (default: 4H)'
     )
+    parser.add_argument(
+        '--min-flips',
+        type=int,
+        default=3,
+        help='Minimum simultaneous indicator flips for ghost signal (default: 3)'
+    )
 
     args = parser.parse_args()
 
@@ -90,11 +96,15 @@ def main():
     logger.info(f"Input:  {args.input}")
     logger.info(f"Output: {args.output}")
     logger.info(f"Lookahead: {args.lookahead} hours")
+    logger.info(f"Min flips: {args.min_flips} (for ghost signal detection)")
     logger.info("")
     logger.info("⚠️  WARNING: USES FUTURE DATA - TRAINING ONLY!")
     logger.info("")
     logger.info("Features to add:")
     logger.info(f"  1. target (PRIMARY - {args.lookahead}H lookahead, σ normalized)")
+    logger.info(f"     - Ghost signal detection: {args.min_flips}+ indicators flip simultaneously")
+    logger.info(f"     - Target = 0 for normal candles")
+    logger.info(f"     - Target = reversal magnitude for ghost signals")
     logger.info("  2. hurst_exponent (trend persistence)")
     logger.info("  3. permutation_entropy (predictability)")
     logger.info("  4. cusum_signal (change detection)")
@@ -147,7 +157,11 @@ def main():
     start_time = time.time()
 
     try:
-        result_df = add_all_training_features(df, lookahead_periods=args.lookahead)
+        result_df = add_all_training_features(
+            df,
+            lookahead_periods=args.lookahead,
+            min_flips=args.min_flips
+        )
         feature_time = time.time() - start_time
 
         logger.info(f"✓ Features added in {feature_time:.1f}s ({feature_time/60:.1f} minutes)")
