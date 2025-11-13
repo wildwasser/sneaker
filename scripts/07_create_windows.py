@@ -8,10 +8,17 @@ sliding windows of N consecutive candles for time series training.
 This gives the model temporal context - it can see trends, momentum,
 and patterns developing over multiple candles.
 
+CRITICAL: Per-Window Normalization
+- 15 features with absolute scale issues (prices, ATR, MACD) are normalized
+  relative to t0 (first candle in window)
+- Example: BTC at $100k and altcoin at $0.50 both normalize to t0=1.0
+- Makes features comparable across different price ranges
+- Other 78 features (RSI, BB, ratios, %) are already scale-independent
+
 Part of Issue #8 (Pipeline Restructuring Epic #1)
 
 Usage:
-    # Default: 12-candle windows
+    # Default: 12-candle windows with normalization
     .venv/bin/python scripts/07_create_windows.py
 
     # Custom window size
@@ -41,11 +48,18 @@ Output:
 
 Window Structure:
     Each window contains N consecutive candles, flattened into a single row:
-    - feature_name_t0: Feature from oldest candle in window
-    - feature_name_t1: Feature from 2nd oldest candle
+    - feature_name_t0: Feature from oldest candle in window (normalized if needed)
+    - feature_name_t1: Feature from 2nd oldest candle (normalized if needed)
     - ...
     - feature_name_t11: Feature from most recent candle (if N=12)
     - target: Target from most recent candle (what we're predicting)
+
+Normalized Features (15 total):
+    - Macro close prices (4): macro_GOLD_close, macro_BNB_close, etc.
+    - Macro velocities (4): macro_GOLD_vel, macro_BNB_vel, etc.
+    - VWAP (1): vwap_20
+    - ATR (2): atr_14, atr_vel
+    - MACD histogram (4): macd_hist, macd_hist_vel, macd_hist_2x, macd_hist_4x
 """
 
 import argparse
@@ -66,10 +80,16 @@ import numpy as np
 
 def create_sliding_windows(df: pd.DataFrame, window_size: int, logger) -> pd.DataFrame:
     """
-    Create sliding windows from time series data.
+    Create sliding windows from time series data with per-window normalization.
 
     For each pair, slides a window of size N across the time series,
     creating one training sample per window position.
+
+    CRITICAL: Normalizes features with absolute scale (prices, ATR, MACD)
+    relative to t0 to make them comparable across different price ranges.
+
+    Example: BTC at $100k and altcoin at $0.50 both normalize to t0=1.0,
+    making relative changes comparable.
 
     Args:
         df: DataFrame with features and target (sorted by pair, timestamp)
@@ -77,13 +97,35 @@ def create_sliding_windows(df: pd.DataFrame, window_size: int, logger) -> pd.Dat
         logger: Logger instance
 
     Returns:
-        DataFrame where each row is a flattened window
+        DataFrame where each row is a flattened window with normalized features
     """
+    # Features requiring per-window normalization (absolute scale issues)
+    NORMALIZE_FEATURES = [
+        # Macro close prices (4) - different assets have vastly different prices
+        'macro_GOLD_close', 'macro_BNB_close',
+        'macro_BTC_PREMIUM_close', 'macro_ETH_PREMIUM_close',
+
+        # Macro velocities (4) - absolute $ changes vary by asset
+        'macro_GOLD_vel', 'macro_BNB_vel',
+        'macro_BTC_PREMIUM_vel', 'macro_ETH_PREMIUM_vel',
+
+        # VWAP (1) - pair-specific absolute price
+        'vwap_20',
+
+        # ATR (2) - BTC ATR ~$3000, altcoin ATR ~$0.05
+        'atr_14', 'atr_vel',
+
+        # MACD histogram (4) - scale varies by price
+        'macd_hist', 'macd_hist_vel',
+        'macd_hist_2x', 'macd_hist_4x'
+    ]
+
     windows_list = []
     total_pairs = df['pair'].nunique()
 
     logger.info(f"Creating windows for {total_pairs} pairs...")
     logger.info(f"Window size: {window_size} candles")
+    logger.info(f"Normalizing {len(NORMALIZE_FEATURES)} features per window (relative to t0)")
 
     for pair_idx, pair in enumerate(df['pair'].unique(), 1):
         pair_data = df[df['pair'] == pair].sort_values('timestamp').reset_index(drop=True)
@@ -104,10 +146,30 @@ def create_sliding_windows(df: pd.DataFrame, window_size: int, logger) -> pd.Dat
             # Create flattened window features
             window_features = {}
 
+            # Get t0 (first candle) values for normalization
+            t0_row = window.iloc[0]
+            t0_values = {feat: t0_row[feat] for feat in NORMALIZE_FEATURES if feat in t0_row}
+
             # Add features from each time step
             for t, (idx, row) in enumerate(window.iterrows()):
                 for feature in SHARED_FEATURE_LIST:
-                    if feature in row:
+                    if feature not in row:
+                        continue
+
+                    # Check if this feature needs normalization
+                    if feature in NORMALIZE_FEATURES:
+                        # Normalize relative to t0 value
+                        t0_value = t0_values.get(feature, 0)
+                        if abs(t0_value) > 1e-10:  # Avoid division by zero
+                            normalized_value = row[feature] / t0_value
+                        else:
+                            # If t0 is zero, use 1.0 (no change from baseline)
+                            # This handles edge cases like zero MACD or zero velocity
+                            normalized_value = 1.0 if abs(row[feature]) < 1e-10 else 0.0
+
+                        window_features[f'{feature}_t{t}'] = normalized_value
+                    else:
+                        # Use raw value (already normalized or scale-independent)
                         window_features[f'{feature}_t{t}'] = row[feature]
 
             # Add target from LAST candle (most recent, t=window_size-1)
