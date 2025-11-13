@@ -15,6 +15,7 @@ from .data import (
 )
 from .indicators import add_core_indicators
 from .features import add_all_features
+from .features_training import add_all_training_features, TRAINING_ONLY_FEATURE_LIST
 from .model import load_model, predict, generate_signals
 
 __all__ = [
@@ -25,6 +26,8 @@ __all__ = [
     'BASELINE_PAIRS',
     'add_core_indicators',
     'add_all_features',
+    'add_all_training_features',
+    'TRAINING_ONLY_FEATURE_LIST',
     'load_model',
     'predict',
     'generate_signals'
