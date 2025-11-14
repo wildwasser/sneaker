@@ -8,7 +8,7 @@ V3 sample weighting (5x for ghost signals).
 Part of Issue #8 (Pipeline Restructuring Epic #1)
 
 Usage:
-    # Default: 12-candle windows
+    # Default: 12-candle windows, default hyperparameters
     .venv/bin/python scripts/08_train_model.py
 
     # Custom paths and issue folder
@@ -17,11 +17,27 @@ Usage:
       --output models/issue-1/model.txt \
       --issue issue-1
 
+    # Custom hyperparameters for optimization experiments
+    .venv/bin/python scripts/08_train_model.py \
+      --issue issue-24 \
+      --num-leaves 127 \
+      --max-depth 6 \
+      --learning-rate 0.05 \
+      --n-estimators 1000
+
 Arguments:
     --input: Input windowed data JSON (from script 07)
     --output: Output model path
     --issue: Issue folder name for proof outputs (e.g., 'issue-1')
     --test-size: Test set fraction (default: 0.1 = 10%)
+
+    Model Hyperparameters (for optimization):
+    --num-leaves: Maximum leaves in one tree (default: 255)
+    --max-depth: Maximum tree depth (default: 8)
+    --learning-rate: Learning rate (default: 0.01)
+    --n-estimators: Number of boosting iterations (default: 2000)
+    --subsample: Fraction of data to sample (default: 0.8)
+    --colsample-bytree: Fraction of features to sample (default: 0.8)
 
 Input:
     data/features/windowed_training_data.json
@@ -114,7 +130,9 @@ def compute_sample_weights(y: np.ndarray, signal_weight: float = 5.0) -> np.ndar
     return weights
 
 
-def train_model(X_train, y_train, sw_train, X_test, y_test, sw_test, logger):
+def train_model(X_train, y_train, sw_train, X_test, y_test, sw_test, logger,
+                num_leaves=255, max_depth=8, learning_rate=0.01, n_estimators=2000,
+                subsample=0.8, colsample_bytree=0.8):
     """
     Train LightGBM model with V3 sample weighting.
 
@@ -124,6 +142,12 @@ def train_model(X_train, y_train, sw_train, X_test, y_test, sw_test, logger):
         X_test, y_test: Test data
         sw_test: Test sample weights
         logger: Logger instance
+        num_leaves: Maximum leaves in one tree (default: 255)
+        max_depth: Maximum tree depth (default: 8)
+        learning_rate: Learning rate (default: 0.01)
+        n_estimators: Number of boosting iterations (default: 2000)
+        subsample: Fraction of data to sample (default: 0.8)
+        colsample_bytree: Fraction of features to sample (default: 0.8)
 
     Returns:
         Trained LightGBM model
@@ -136,12 +160,12 @@ def train_model(X_train, y_train, sw_train, X_test, y_test, sw_test, logger):
     params = {
         'objective': 'regression',
         'metric': 'rmse',
-        'num_leaves': 255,
-        'max_depth': 8,
-        'learning_rate': 0.01,
-        'n_estimators': 2000,
-        'subsample': 0.8,
-        'colsample_bytree': 0.8,
+        'num_leaves': num_leaves,
+        'max_depth': max_depth,
+        'learning_rate': learning_rate,
+        'n_estimators': n_estimators,
+        'subsample': subsample,
+        'colsample_bytree': colsample_bytree,
         'random_state': 42,
         'n_jobs': -1,
         'verbose': -1
@@ -484,6 +508,44 @@ def main():
         help='Window size used in script 07 (for feature extraction)'
     )
 
+    # Model hyperparameters
+    parser.add_argument(
+        '--num-leaves',
+        type=int,
+        default=255,
+        help='Maximum leaves in one tree (default: 255)'
+    )
+    parser.add_argument(
+        '--max-depth',
+        type=int,
+        default=8,
+        help='Maximum tree depth (default: 8)'
+    )
+    parser.add_argument(
+        '--learning-rate',
+        type=float,
+        default=0.01,
+        help='Learning rate (default: 0.01)'
+    )
+    parser.add_argument(
+        '--n-estimators',
+        type=int,
+        default=2000,
+        help='Number of boosting iterations (default: 2000)'
+    )
+    parser.add_argument(
+        '--subsample',
+        type=float,
+        default=0.8,
+        help='Fraction of data to sample (default: 0.8)'
+    )
+    parser.add_argument(
+        '--colsample-bytree',
+        type=float,
+        default=0.8,
+        help='Fraction of features to sample (default: 0.8)'
+    )
+
     args = parser.parse_args()
 
     # Setup logging
@@ -497,6 +559,14 @@ def main():
     logger.info(f"Issue:       {args.issue}")
     logger.info(f"Test size:   {args.test_size * 100:.0f}%")
     logger.info(f"Window size: {args.window_size} candles")
+    logger.info("")
+    logger.info("Model Hyperparameters:")
+    logger.info(f"  num_leaves:       {args.num_leaves}")
+    logger.info(f"  max_depth:        {args.max_depth}")
+    logger.info(f"  learning_rate:    {args.learning_rate}")
+    logger.info(f"  n_estimators:     {args.n_estimators}")
+    logger.info(f"  subsample:        {args.subsample}")
+    logger.info(f"  colsample_bytree: {args.colsample_bytree}")
     logger.info("")
 
     # Create output directories
@@ -588,7 +658,15 @@ def main():
     logger.info(f"Test set:  {len(y_test):,} samples ({(y_test != 0).sum():,} signals)")
 
     # Train model
-    model = train_model(X_train, y_train, sw_train, X_test, y_test, sw_test, logger)
+    model = train_model(
+        X_train, y_train, sw_train, X_test, y_test, sw_test, logger,
+        num_leaves=args.num_leaves,
+        max_depth=args.max_depth,
+        learning_rate=args.learning_rate,
+        n_estimators=args.n_estimators,
+        subsample=args.subsample,
+        colsample_bytree=args.colsample_bytree
+    )
 
     # Evaluate model
     metrics = evaluate_model(model, X_train, y_train, X_test, y_test, logger)
