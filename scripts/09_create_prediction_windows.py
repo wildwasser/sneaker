@@ -44,12 +44,12 @@ Arguments:
 Input:
     data/features/prediction_complete_features.json
     - Recent candles (~2,000-5,000 per pair)
-    - 93 shared features (NO training-only features)
+    - 89 shared features (Issue #23: removed 4 macro close) (NO training-only features)
 
 Output:
     data/features/windowed_prediction_data.json
     - Windows from recent data
-    - 1,116 features (93 shared features × 12 candles)
+    - 1,116 features (89 shared features (Issue #23: removed 4 macro close) × 12 candles)
     - NO target column (prediction data doesn't have targets)
     - Metadata: pair, timestamp (from last candle in window)
 

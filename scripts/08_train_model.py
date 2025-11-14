@@ -26,7 +26,7 @@ Arguments:
 Input:
     data/features/windowed_training_data.json
     - ~779,000 windows
-    - 1,116 features (93 shared × 12 candles)
+    - 1,068 features (89 shared (Issue #23) × 12 candles)
     - 1 target per window
 
 Output:

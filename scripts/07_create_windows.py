@@ -42,12 +42,12 @@ Arguments:
 Input:
     data/features/training_complete_features.json
     - 791,044 individual candles
-    - 93 shared features + 4 training-only features (including target)
+    - 89 shared features (Issue #23: removed 4 macro close) + 4 training-only features (including target)
 
 Output:
     data/features/windowed_training_data.json
     - ~779,000 windows (depends on pairs and window size)
-    - 1,116 features (93 shared features × 12 candles)
+    - 1,116 features (89 shared features (Issue #23: removed 4 macro close) × 12 candles)
     - 1 target per window (from last candle)
 
 Window Structure:

@@ -28,7 +28,7 @@ Arguments:
 Input:
     data/features/training_shared_features.json (from issue #6)
     - OHLCV data
-    - 93 shared features
+    - 89 shared features (Issue #23: removed 4 macro close)
     - ~791,044 records
 
 Output:
