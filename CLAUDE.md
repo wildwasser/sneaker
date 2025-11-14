@@ -33,7 +33,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 scripts/01_download_training_binance.py
 scripts/02_download_training_macro_binance.py
 
-# 2. Add features (93 shared + 4 training-only)
+# 2. Add features (89 shared + 4 training-only) [Issue #23: removed 4 macro close]
 scripts/05_add_shared_features.py --mode training
 scripts/06_add_training_features.py
 
@@ -48,7 +48,7 @@ scripts/08_train_model.py           # LightGBM with V3 weighting
 scripts/03_download_prediction_binance.py
 scripts/04_download_prediction_macro_binance.py
 
-# 2. Add features (same 93 shared features)
+# 2. Add features (same 89 shared features) [Issue #23]
 scripts/05_add_shared_features.py --mode prediction
 
 # 3. Generate predictions (same windowing + normalization)
@@ -60,7 +60,7 @@ scripts/10_generate_predictions.py         # Load model, generate signals
 
 **1. Windowed Time Series (12 candles):**
 - Model sees temporal context (trends, momentum)
-- 93 features × 12 time steps = 1,116 features per window
+- 89 features × 12 time steps = 1,068 features [Issue #23] per window
 - Sliding window moves 1 candle at a time
 
 **2. Per-Window Normalization (CRITICAL!):**
@@ -75,7 +75,7 @@ scripts/10_generate_predictions.py         # Load model, generate signals
 - BTC_PREMIUM: USDT-margined futures premium
 - ETH_PREMIUM: Coin-margined futures premium
 
-**4. 93 Shared Features:**
+**4. 89 Shared Features:** [Issue #23: removed 4 redundant macro close]
 - 12 macro features (4 indicators × 3 derivatives)
 - 20 core indicators (RSI, BB, MACD, Stoch, ADX, etc.)
 - 61 derived features (momentum, advanced, trend, statistical)
@@ -85,7 +85,7 @@ scripts/10_generate_predictions.py         # Load model, generate signals
 
 **Easy to Experiment With:**
 - 🔧 **Hyperparameters:** LightGBM parameters (num_leaves, max_depth, learning_rate, etc.)
-- 🔧 **Feature Selection:** Which of 93 features matter most?
+- 🔧 **Feature Selection:** Which of 89 features matter most?
 - 🔧 **Window Size:** Is 12 candles optimal? Try 8, 16, 24?
 - 🔧 **Model Types:** Try XGBoost, neural networks, ensembles?
 - 🔧 **Sample Weighting:** Is 5× for signals optimal?
@@ -122,7 +122,7 @@ data/
 │   ├── training/           # 791K candles, 20 pairs
 │   └── prediction/         # 256h LINKUSDT
 ├── features/               # Feature engineering (gitignored)
-│   ├── *_shared_features.json         # 93 shared features
+│   ├── *_shared_features.json         # 89 shared features
 │   ├── *_complete_features.json       # With training features
 │   └── windowed_*.json                # 1,116 windowed features
 └── predictions/            # Prediction outputs (gitignored)
@@ -142,7 +142,7 @@ proof/
 scripts/                   # 10 pipeline scripts (see above)
 
 sneaker/                   # Core modules
-├── features_shared.py     # SHARED_FEATURE_LIST (93 features)
+├── features_shared.py     # SHARED_FEATURE_LIST (89 features, Issue #23)
 ├── macro_*.py             # Macro data modules
 └── ...
 ```
@@ -154,7 +154,7 @@ sneaker/                   # Core modules
 The infrastructure is complete and correct. Now optimize:
 1. Hyperparameter tuning (LightGBM grid search)
 2. Feature importance analysis (which features actually matter?)
-3. Feature selection (reduce from 93 to top N)
+3. Feature selection (reduce from 89 to top N)
 4. Window size optimization (test 8, 16, 24 candles)
 5. Ensemble methods (combine multiple models)
 

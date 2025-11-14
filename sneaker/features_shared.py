@@ -8,12 +8,14 @@ Shared features (89 total):
 - 24 momentum features (price ROC, accelerations, vol features)
 - 32 advanced features (interactions, vol regime, divergences, trend strength)
 - 1 statistical feature (squeeze_duration)
-- 12 macro features (GOLD, BNB, BTC_PREMIUM, ETH_PREMIUM: close + vel + ROC)
+- 8 macro features (GOLD, BNB, BTC_PREMIUM, ETH_PREMIUM: vel + roc_5 only)
+  NOTE: macro 'close' features removed in issue #23 (zero importance, redundant with vel)
 
 EXCLUDED from shared (training-only):
 - hurst_exponent (complex, unstable on live)
 - permutation_entropy (complex, may overfit)
 - cusum_signal (cumulative, grows indefinitely)
+- macro close features (redundant with vel, zero importance)
 """
 
 import numpy as np
@@ -30,23 +32,26 @@ def merge_macro_features(crypto_df: pd.DataFrame, macro_df: pd.DataFrame) -> pd.
     """
     Merge macro indicators into crypto dataframe.
 
-    Adds 12 macro features per row:
-    - 4 close prices (macro_GOLD_close, macro_BNB_close, etc.)
-    - 4 velocities (1-period diff)
-    - 4 ROC values (5-period % change)
+    Adds 8 macro features per row:
+    - 4 velocities (1-period diff) - HIGH IMPORTANCE
+    - 4 ROC values (5-period % change) - MODERATE IMPORTANCE
+
+    NOTE: Close prices are calculated internally but NOT added to final dataset.
+    They are only used to compute vel and roc_5 derivatives.
+    (Issue #23: close features have zero importance, redundant with derivatives)
 
     Args:
         crypto_df: DataFrame with crypto OHLCV (must have 'pair' and 'timestamp' columns)
         macro_df: DataFrame with macro OHLCV (must have 'ticker' and 'timestamp' columns)
 
     Returns:
-        DataFrame with 12 macro features added
+        DataFrame with 8 macro features added (vel and roc_5 only)
     """
     # Create pivot tables for each macro field we need
     macro_close = macro_df.pivot(index='timestamp', columns='ticker', values='close')
     macro_close.columns = [f'macro_{col}_close' for col in macro_close.columns]
 
-    # Merge close prices
+    # Merge close prices TEMPORARILY (needed for calculating derivatives)
     merged = crypto_df.merge(macro_close, on='timestamp', how='left')
 
     # Calculate velocities (1-period diff) for each macro indicator
@@ -60,6 +65,10 @@ def merge_macro_features(crypto_df: pd.DataFrame, macro_df: pd.DataFrame) -> pd.
         close_col = f'macro_{ticker}_close'
         if close_col in merged.columns:
             merged[f'macro_{ticker}_roc_5'] = merged[close_col].pct_change(5) * 100
+
+    # REMOVE close features (Issue #23: redundant with derivatives, zero importance)
+    close_cols_to_remove = [col for col in merged.columns if col.startswith('macro_') and col.endswith('_close')]
+    merged = merged.drop(columns=close_cols_to_remove)
 
     # Fill NaN values in macro columns with forward-fill, then 0
     # (In case of any missing macro data at start)
@@ -357,21 +366,22 @@ def add_all_shared_features(df: pd.DataFrame, macro_df: pd.DataFrame) -> pd.Data
     Add all shared features to DataFrame (NO look-forward).
 
     Features added:
-    - 12 macro features (GOLD, BNB, BTC_PREMIUM, ETH_PREMIUM: close + vel + ROC)
+    - 8 macro features (GOLD, BNB, BTC_PREMIUM, ETH_PREMIUM: vel + roc_5 only)
+      NOTE: Close features removed in issue #23 (zero importance, redundant)
     - 20 core indicators (from indicators.py)
     - 24 momentum features
     - 32 advanced features (excluding 3 training-only statistical)
     - 4 trend strength features
     - 1 statistical feature (squeeze_duration)
 
-    Total: 93 shared features (12 macro + 20 core + 24 momentum + 32 advanced + 4 trend + 1 statistical)
+    Total: 89 shared features (8 macro + 20 core + 24 momentum + 32 advanced + 4 trend + 1 statistical)
 
     Args:
         df: DataFrame with crypto OHLCV data (columns: open, high, low, close, volume, pair, timestamp)
         macro_df: DataFrame with macro OHLCV data (columns: open, high, low, close, volume, ticker, timestamp)
 
     Returns:
-        DataFrame with all 93 shared features added
+        DataFrame with all 89 shared features added
     """
     # Ensure required columns exist
     required_crypto = ['open', 'high', 'low', 'close', 'volume', 'pair', 'timestamp']
@@ -412,10 +422,9 @@ def add_all_shared_features(df: pd.DataFrame, macro_df: pd.DataFrame) -> pd.Data
 # Feature List for Reference
 # ====================================================================================
 
-# All 93 shared features
+# All 89 shared features (Issue #23: removed 4 macro close features)
 SHARED_FEATURE_LIST = [
-    # Macro features (12)
-    'macro_GOLD_close', 'macro_BNB_close', 'macro_BTC_PREMIUM_close', 'macro_ETH_PREMIUM_close',
+    # Macro features (8) - vel and roc_5 only (close features removed: zero importance)
     'macro_GOLD_vel', 'macro_BNB_vel', 'macro_BTC_PREMIUM_vel', 'macro_ETH_PREMIUM_vel',
     'macro_GOLD_roc_5', 'macro_BNB_roc_5', 'macro_BTC_PREMIUM_roc_5', 'macro_ETH_PREMIUM_roc_5',
 
@@ -458,5 +467,5 @@ SHARED_FEATURE_LIST = [
     'squeeze_duration'
 ]
 
-# Verify count
-assert len(SHARED_FEATURE_LIST) == 93, f"Feature count mismatch: expected 93, got {len(SHARED_FEATURE_LIST)}"
+# Verify count (Issue #23: 93 → 89 after removing 4 macro close features)
+assert len(SHARED_FEATURE_LIST) == 89, f"Feature count mismatch: expected 89, got {len(SHARED_FEATURE_LIST)}"

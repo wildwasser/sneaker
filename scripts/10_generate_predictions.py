@@ -32,7 +32,7 @@ Arguments:
 Input:
     data/features/windowed_prediction_data.json
     - Windows from recent data
-    - 1,116 features (93 shared × 12 candles)
+    - 1,068 features (89 shared (Issue #23) × 12 candles)
     - NO target column
 
 Output:

@@ -3,16 +3,18 @@
 Add Shared Features Pipeline (training & prediction)
 
 Adds shared features (NO look-forward) for both training and prediction:
-- 12 macro features (GOLD, BNB, BTC_PREMIUM, ETH_PREMIUM: close + vel + ROC)
+- 8 macro features (GOLD, BNB, BTC_PREMIUM, ETH_PREMIUM: vel + roc_5 only)
+  NOTE: Close features removed in Issue #23 (zero importance, redundant)
 - 20 core indicators
 - 24 momentum features
 - 32 advanced features (excluding training-only statistical)
 - 4 trend strength features
 - 1 statistical feature (squeeze_duration)
 
-Total: 93 shared features
+Total: 89 shared features (was 93 before Issue #23)
 
 Part of Issue #6 (sub-issue #1.5 of Pipeline Restructuring Epic #1)
+Updated in Issue #23 (removed 4 redundant macro close features)
 
 Usage:
     # Training data (default)
