@@ -1,0 +1,28 @@
+================================================================================
+TRAINING REPORT
+================================================================================
+Generated: 2025-11-14 09:37:54
+
+Overall Performance:
+  Train R²:       0.1598
+  Test R²:        0.0533
+  Train RMSE:     0.5399σ
+  Test RMSE:      0.5896σ
+
+Signal Performance (CRITICAL):
+  Train Signal R²:  0.1680
+  Test Signal R²:   0.0653
+  Train Signal MAE: 1.6425σ
+  Test Signal MAE:  1.7205σ
+
+Direction Accuracy:
+  Train: 3.72%
+  Test:  3.30%
+
+Dataset Size:
+  Train samples: 711,741
+  Test samples:  79,083
+  Train signals: 38,501
+  Test signals:  4,345
+
+================================================================================
